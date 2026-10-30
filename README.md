@@ -21,7 +21,7 @@ templates/index.html          # halaman web dashboard
 data/                         # CSV dataset
 model/                        # keluaran notebook: lstm_traffic.h5, scaler.joblib, recent.csv, test_results.csv, metrics.json
 figures/                      # grafik keluaran notebook
-requirements.txt, Procfile, Dockerfile, .python-version
+requirements.txt, Dockerfile, .python-version
 ```
 
 ## Menjalankan Lokal
