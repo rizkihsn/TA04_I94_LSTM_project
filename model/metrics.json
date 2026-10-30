@@ -1,0 +1,29 @@
+{
+  "timesteps": 48,
+  "features": [
+    "traffic_volume",
+    "hour_sin",
+    "hour_cos",
+    "dow_sin",
+    "dow_cos"
+  ],
+  "metrics": {
+    "LSTM": {
+      "rmse": 301.02,
+      "mae": 226.02,
+      "r2": 0.9768
+    },
+    "Persistence": {
+      "rmse": 813.49,
+      "mae": 585.56,
+      "r2": 0.8309
+    },
+    "Seasonal naive": {
+      "rmse": 613.5,
+      "mae": 300.62,
+      "r2": 0.9038
+    }
+  },
+  "data_start": "2016-04-01 00:00:00",
+  "data_end": "2018-09-30 23:00:00"
+}
