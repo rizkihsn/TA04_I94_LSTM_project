@@ -1,121 +1,1388 @@
 <!DOCTYPE html>
 <html lang="id">
+
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Peramalan Volume Lalu Lintas I-94 (LSTM)</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<style>
-  :root{--bg:#f5f7fa;--card:#fff;--text:#1f2937;--muted:#6b7280;--accent:#2563eb;--accent2:#f97316;--border:#e5e7eb}
-  *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text)}
-  header{background:#1e3a8a;color:#fff;padding:24px 16px;text-align:center} header h1{margin:0 0 6px;font-size:1.5rem} header p{margin:0;opacity:.85;font-size:.95rem}
-  main{max-width:1000px;margin:0 auto;padding:16px}
-  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px}
-  .card h2{margin:0 0 4px;font-size:1.1rem} .muted{color:var(--muted);font-size:.88rem;margin:0 0 12px}
-  .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
-  .metric{border:1px solid var(--border);border-radius:10px;padding:12px} .metric b{display:block;margin-bottom:4px}
-  .controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
-  select,button{padding:8px 12px;border-radius:8px;border:1px solid var(--border);font-size:.95rem;background:#fff}
-  button{background:var(--accent);color:#fff;border-color:var(--accent);cursor:pointer}
-  .chart-box{position:relative;height:320px}
-  #err{color:#b91c1c;margin-top:8px}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Peramalan Lalu Lintas I-94 (LSTM)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap"
+    rel="stylesheet">
+  <style>
+    @property --ang {
+      syntax: '<angle>';
+      initial-value: 0deg;
+      inherits: false
+    }
+
+    :root {
+      --bg: #050a16;
+      --card: rgba(14, 22, 44, .62);
+      --border: rgba(148, 163, 184, .16);
+      --text: #e8eef9;
+      --muted: #8fa0bd;
+      --cyan: #22d3ee;
+      --blue: #3b82f6;
+      --amber: #fbbf24;
+      --orange: #fb923c;
+      --good: #34d399;
+      --bad: #f87171;
+      --display: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+      --body: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box
+    }
+
+    html {
+      scroll-behavior: smooth
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--body);
+      line-height: 1.55;
+      overflow-x: hidden;
+      background-image: radial-gradient(900px 500px at 12% 8%, rgba(59, 130, 246, .16), transparent 60%),
+        radial-gradient(800px 500px at 88% 30%, rgba(34, 211, 238, .10), transparent 60%),
+        radial-gradient(900px 600px at 50% 100%, rgba(251, 146, 60, .08), transparent 60%);
+      background-attachment: fixed
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      opacity: .5;
+      background-image: linear-gradient(rgba(148, 163, 184, .05) 1px, transparent 1px), linear-gradient(90deg, rgba(148, 163, 184, .05) 1px, transparent 1px);
+      background-size: 44px 44px;
+      mask-image: radial-gradient(ellipse at 50% 30%, #000 20%, transparent 75%)
+    }
+
+    /* ---------- HERO ---------- */
+    .hero {
+      position: relative;
+      min-height: 560px;
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      z-index: 1
+    }
+
+    #road {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 25%, #000 70%, transparent 100%);
+      mask-image: linear-gradient(to bottom, transparent 0, #000 25%, #000 70%, transparent 100%)
+    }
+
+    .hero-inner {
+      position: relative;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 72px 20px 110px;
+      width: 100%
+    }
+
+    .live {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      font-size: .78rem;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--cyan);
+      background: rgba(34, 211, 238, .08);
+      border: 1px solid rgba(34, 211, 238, .28);
+      padding: 6px 14px;
+      border-radius: 999px;
+      backdrop-filter: blur(8px)
+    }
+
+    .live i {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 0 0 rgba(34, 211, 238, .7);
+      animation: pulse 1.8s infinite
+    }
+
+    @keyframes pulse {
+      70% {
+        box-shadow: 0 0 0 10px rgba(34, 211, 238, 0)
+      }
+
+      100% {
+        box-shadow: 0 0 0 0 rgba(34, 211, 238, 0)
+      }
+    }
+
+    h1 {
+      text-shadow: 0 2px 24px rgba(5, 10, 22, .9);
+      font-family: var(--display);
+      font-weight: 700;
+      margin: 20px 0 14px;
+      font-size: clamp(2.1rem, 6vw, 4.2rem);
+      line-height: 1.04;
+      letter-spacing: -.02em;
+      max-width: 800px
+    }
+
+    h1 .grad {
+      background: linear-gradient(100deg, var(--cyan), var(--blue) 35%, var(--amber) 70%, var(--cyan));
+      background-size: 250% 100%;
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      animation: flow 7s linear infinite
+    }
+
+    @keyframes flow {
+      to {
+        background-position: -250% 0
+      }
+    }
+
+    .sub {
+      text-shadow: 0 1px 14px rgba(5, 10, 22, .95);
+      max-width: 600px;
+      color: #b5c3dc;
+      font-size: 1.05rem;
+      margin: 0
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 26px;
+      min-height: 36px
+    }
+
+    .chip {
+      font-size: .84rem;
+      color: #d5e0f3;
+      background: rgba(15, 23, 42, .55);
+      border: 1px solid var(--border);
+      padding: 7px 13px;
+      border-radius: 999px;
+      backdrop-filter: blur(8px);
+      animation: rise .6s both
+    }
+
+    .scroll {
+      position: absolute;
+      left: 50%;
+      bottom: 26px;
+      transform: translateX(-50%);
+      width: 26px;
+      height: 42px;
+      border: 2px solid rgba(148, 163, 184, .4);
+      border-radius: 14px
+    }
+
+    .scroll::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 8px;
+      width: 4px;
+      height: 8px;
+      margin-left: -2px;
+      border-radius: 2px;
+      background: var(--cyan);
+      animation: wheel 1.8s infinite
+    }
+
+    @keyframes wheel {
+      0% {
+        opacity: 0;
+        transform: translateY(0)
+      }
+
+      30% {
+        opacity: 1
+      }
+
+      100% {
+        opacity: 0;
+        transform: translateY(14px)
+      }
+    }
+
+    .fade {
+      animation: rise .8s both
+    }
+
+    @keyframes rise {
+      from {
+        opacity: 0;
+        transform: translateY(22px)
+      }
+
+      to {
+        opacity: 1;
+        transform: none
+      }
+    }
+
+    /* ---------- LAYOUT ---------- */
+    main {
+      position: relative;
+      z-index: 2;
+      max-width: 1100px;
+      margin: -60px auto 30px;
+      padding: 0 16px
+    }
+
+    .card {
+      position: relative;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 24px;
+      margin-bottom: 22px;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: 0 20px 60px -30px rgba(0, 0, 0, .8);
+      overflow: hidden
+    }
+
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity .3s;
+      background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 0%), rgba(34, 211, 238, .10), transparent 60%)
+    }
+
+    .card:hover::before {
+      opacity: 1
+    }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(34px) scale(.985);
+      transition: opacity .8s cubic-bezier(.2, .7, .2, 1), transform .8s cubic-bezier(.2, .7, .2, 1)
+    }
+
+    .reveal.in {
+      opacity: 1;
+      transform: none
+    }
+
+    .card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin-bottom: 18px
+    }
+
+    h2 {
+      font-family: var(--display);
+      font-size: 1.3rem;
+      margin: 0 0 4px;
+      display: flex;
+      align-items: center;
+      gap: 10px
+    }
+
+    h2 .ico {
+      width: 30px;
+      height: 30px;
+      border-radius: 9px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, rgba(34, 211, 238, .25), rgba(59, 130, 246, .25));
+      border: 1px solid rgba(34, 211, 238, .3)
+    }
+
+    h2 .ico svg {
+      width: 16px;
+      height: 16px;
+      stroke: var(--cyan);
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: .9rem;
+      margin: 0;
+      max-width: 640px
+    }
+
+    /* ---------- METRIK ---------- */
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 16px
+    }
+
+    .metric {
+      position: relative;
+      border-radius: 18px;
+      padding: 18px;
+      background: rgba(10, 16, 34, .55);
+      border: 1px solid var(--border);
+      animation: rise .7s both;
+      animation-delay: calc(var(--i)*.12s);
+      transition: transform .25s, border-color .25s
+    }
+
+    .metric:hover {
+      transform: translateY(-4px);
+      border-color: rgba(148, 163, 184, .4)
+    }
+
+    .metric.best {
+      border-color: transparent;
+      background: linear-gradient(rgba(10, 18, 40, .92), rgba(10, 18, 40, .92)) padding-box,
+        conic-gradient(from var(--ang), var(--cyan), var(--blue), var(--amber), var(--cyan)) border-box;
+      animation: rise .7s both, spin 5s linear infinite;
+      animation-delay: calc(var(--i)*.12s), 0s;
+      box-shadow: 0 0 40px -12px rgba(34, 211, 238, .45)
+    }
+
+    @keyframes spin {
+      to {
+        --ang: 360deg
+      }
+    }
+
+    .m-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px
+    }
+
+    .name {
+      font-family: var(--display);
+      font-weight: 600;
+      font-size: 1.05rem
+    }
+
+    .badge {
+      font-size: .68rem;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: #031018;
+      background: linear-gradient(90deg, var(--cyan), var(--good));
+      padding: 3px 10px;
+      border-radius: 999px
+    }
+
+    .m-body {
+      display: flex;
+      align-items: center;
+      gap: 18px
+    }
+
+    .ring {
+      position: relative;
+      width: 96px;
+      height: 96px;
+      flex: none
+    }
+
+    .ring svg {
+      width: 100%;
+      height: 100%;
+      transform: rotate(-90deg)
+    }
+
+    .ring circle {
+      fill: none;
+      stroke-width: 7;
+      stroke-linecap: round
+    }
+
+    .ring .trk {
+      stroke: rgba(148, 163, 184, .14)
+    }
+
+    .ring .val {
+      stroke: var(--grad, var(--muted));
+      transition: stroke-dashoffset 1.4s cubic-bezier(.2, .8, .2, 1) .2s
+    }
+
+    .metric.best .ring .val {
+      stroke: url(#gradRing)
+    }
+
+    .ring-txt {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center
+    }
+
+    .ring-txt b {
+      font-family: var(--display);
+      font-size: 1.15rem
+    }
+
+    .ring-txt small {
+      font-size: .66rem;
+      color: var(--muted);
+      letter-spacing: .1em
+    }
+
+    .m-nums {
+      display: grid;
+      gap: 8px;
+      flex: 1
+    }
+
+    .m-nums span {
+      display: block;
+      font-size: .7rem;
+      color: var(--muted);
+      letter-spacing: .12em;
+      text-transform: uppercase
+    }
+
+    .m-nums b {
+      font-family: var(--display);
+      font-size: 1.5rem;
+      line-height: 1.1
+    }
+
+    .m-nums .sm b {
+      font-size: 1.1rem;
+      color: #c9d6ee
+    }
+
+    .bar {
+      height: 6px;
+      border-radius: 99px;
+      background: rgba(148, 163, 184, .14);
+      margin-top: 16px;
+      overflow: hidden
+    }
+
+    .bar i {
+      display: block;
+      height: 100%;
+      width: 0;
+      border-radius: 99px;
+      background: var(--muted);
+      transition: width 1.3s cubic-bezier(.2, .8, .2, 1) .3s
+    }
+
+    .metric.best .bar i {
+      background: linear-gradient(90deg, var(--cyan), var(--blue))
+    }
+
+    .bar-cap {
+      font-size: .72rem;
+      color: var(--muted);
+      margin-top: 6px
+    }
+
+    .insight {
+      margin-top: 18px;
+      padding: 14px 16px;
+      border-radius: 14px;
+      font-size: .95rem;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      background: linear-gradient(90deg, rgba(52, 211, 153, .12), rgba(34, 211, 238, .06));
+      border: 1px solid rgba(52, 211, 153, .28);
+      animation: rise .7s .5s both
+    }
+
+    .insight svg {
+      flex: none;
+      width: 20px;
+      height: 20px;
+      stroke: var(--good);
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      margin-top: 2px
+    }
+
+    .skeleton {
+      height: 190px;
+      border-radius: 18px;
+      background: linear-gradient(100deg, rgba(148, 163, 184, .06) 30%, rgba(148, 163, 184, .16) 50%, rgba(148, 163, 184, .06) 70%);
+      background-size: 300% 100%;
+      animation: sh 1.3s infinite
+    }
+
+    @keyframes sh {
+      to {
+        background-position: -300% 0
+      }
+    }
+
+    /* ---------- KONTROL ---------- */
+    .tools {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap
+    }
+
+    .seg {
+      position: relative;
+      display: inline-flex;
+      background: rgba(5, 10, 22, .7);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 4px
+    }
+
+    .seg .pill {
+      position: absolute;
+      top: 4px;
+      bottom: 4px;
+      left: 0;
+      width: 0;
+      border-radius: 9px;
+      background: linear-gradient(135deg, rgba(34, 211, 238, .28), rgba(59, 130, 246, .28));
+      border: 1px solid rgba(34, 211, 238, .4);
+      box-shadow: 0 0 18px -4px rgba(34, 211, 238, .6);
+      transition: left .35s cubic-bezier(.3, .9, .3, 1.1), width .35s cubic-bezier(.3, .9, .3, 1.1)
+    }
+
+    .seg button {
+      position: relative;
+      z-index: 1;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      padding: 7px 14px;
+      font: 500 .86rem var(--body);
+      cursor: pointer;
+      border-radius: 9px;
+      transition: color .2s
+    }
+
+    .seg button:hover {
+      color: var(--text)
+    }
+
+    .seg button.active {
+      color: #fff
+    }
+
+    .seg button:focus-visible,
+    .go:focus-visible,
+    .retry:focus-visible {
+      outline: 2px solid var(--cyan);
+      outline-offset: 2px
+    }
+
+    .go {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 0;
+      cursor: pointer;
+      color: #03121c;
+      font: 600 .86rem var(--body);
+      padding: 9px 16px;
+      border-radius: 12px;
+      background: linear-gradient(90deg, var(--cyan), var(--amber));
+      background-size: 200% 100%;
+      transition: background-position .5s, transform .2s, box-shadow .3s;
+      box-shadow: 0 8px 24px -10px rgba(34, 211, 238, .8)
+    }
+
+    .go:hover {
+      background-position: 100% 0;
+      transform: translateY(-1px)
+    }
+
+    .go svg {
+      width: 16px;
+      height: 16px;
+      stroke: #03121c;
+      fill: none;
+      stroke-width: 2.4;
+      stroke-linecap: round;
+      stroke-linejoin: round
+    }
+
+    .go.busy svg {
+      animation: rot .8s linear infinite
+    }
+
+    .go:disabled {
+      opacity: .7;
+      cursor: progress
+    }
+
+    @keyframes rot {
+      to {
+        transform: rotate(360deg)
+      }
+    }
+
+    /* ---------- GRAFIK ---------- */
+    .chart-box {
+      position: relative;
+      height: 340px;
+      border-radius: 14px
+    }
+
+    .chart-box canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      touch-action: pan-y
+    }
+
+    .state {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 12px;
+      color: var(--muted);
+      font-size: .92rem;
+      text-align: center;
+      padding: 16px;
+      background: rgba(8, 14, 30, .72);
+      backdrop-filter: blur(6px);
+      border-radius: 14px;
+      z-index: 3;
+      transition: opacity .3s
+    }
+
+    .state.hidden {
+      opacity: 0;
+      pointer-events: none
+    }
+
+    .spinner {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      border: 3px solid rgba(148, 163, 184, .2);
+      border-top-color: var(--cyan);
+      animation: rot .8s linear infinite
+    }
+
+    .state.error {
+      color: var(--bad)
+    }
+
+    .retry {
+      border: 1px solid var(--border);
+      background: rgba(15, 23, 42, .8);
+      color: var(--text);
+      padding: 7px 14px;
+      border-radius: 10px;
+      cursor: pointer;
+      font: 500 .86rem var(--body)
+    }
+
+    .tip {
+      position: absolute;
+      top: 10px;
+      z-index: 4;
+      pointer-events: none;
+      min-width: 170px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-size: .8rem;
+      opacity: 0;
+      transform: translateY(4px);
+      transition: opacity .15s, transform .15s;
+      background: rgba(8, 14, 30, .92);
+      border: 1px solid rgba(148, 163, 184, .3);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 12px 30px -10px #000
+    }
+
+    .tip.on {
+      opacity: 1;
+      transform: none
+    }
+
+    .tip .tt {
+      color: var(--muted);
+      margin-bottom: 6px;
+      font-size: .74rem;
+      letter-spacing: .04em
+    }
+
+    .tip .tr {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 3px
+    }
+
+    .tip .tr i {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      flex: none
+    }
+
+    .tip .tr b {
+      margin-left: auto;
+      padding-left: 14px;
+      font-family: var(--display)
+    }
+
+    .legend {
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+      font-size: .82rem;
+      color: var(--muted)
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px
+    }
+
+    .legend i {
+      width: 18px;
+      height: 3px;
+      border-radius: 2px
+    }
+
+    .legend i.dash {
+      background: repeating-linear-gradient(90deg, var(--amber) 0 5px, transparent 5px 9px) !important
+    }
+
+    /* ---------- STAT & HEATMAP ---------- */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px;
+      margin-top: 18px
+    }
+
+    .stat {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px 16px;
+      background: rgba(10, 16, 34, .5);
+      animation: rise .6s both;
+      animation-delay: calc(var(--i)*.08s)
+    }
+
+    .stat span {
+      display: block;
+      font-size: .7rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .12em
+    }
+
+    .stat b {
+      font-family: var(--display);
+      font-size: 1.6rem;
+      line-height: 1.2
+    }
+
+    .stat small {
+      display: block;
+      color: var(--muted);
+      font-size: .8rem
+    }
+
+    .heat-title {
+      margin: 22px 0 10px;
+      font-family: var(--display);
+      font-size: .95rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px
+    }
+
+    .heat-legend {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font: 400 .76rem var(--body);
+      color: var(--muted)
+    }
+
+    .heat-legend i {
+      width: 110px;
+      height: 8px;
+      border-radius: 99px;
+      background: linear-gradient(90deg, #22d3ee, #fbbf24, #ef4444)
+    }
+
+    .heat {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(34px, 1fr));
+      gap: 6px
+    }
+
+    .cell {
+      height: 38px;
+      border-radius: 9px;
+      display: grid;
+      place-items: center;
+      font-size: .68rem;
+      font-weight: 600;
+      color: rgba(3, 10, 20, .82);
+      animation: pop .5s both;
+      animation-delay: calc(var(--i)*22ms);
+      transition: transform .15s, filter .15s;
+      cursor: default
+    }
+
+    .cell:hover {
+      transform: translateY(-3px) scale(1.12);
+      filter: brightness(1.15);
+      z-index: 2
+    }
+
+    @keyframes pop {
+      from {
+        opacity: 0;
+        transform: scale(.4)
+      }
+
+      to {
+        opacity: 1;
+        transform: none
+      }
+    }
+
+    footer {
+      position: relative;
+      z-index: 2;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 10px 16px 40px;
+      text-align: center;
+      color: var(--muted);
+      font-size: .82rem
+    }
+
+    @media (max-width:600px) {
+      .card {
+        padding: 16px;
+        border-radius: 18px
+      }
+
+      .chart-box {
+        height: 270px
+      }
+
+      .hero {
+        min-height: 520px
+      }
+
+      .hero-inner {
+        padding: 56px 16px 100px
+      }
+
+      .m-body {
+        gap: 12px
+      }
+
+      .ring {
+        width: 84px;
+        height: 84px
+      }
+    }
+
+    @media (prefers-reduced-motion:reduce) {
+
+      *,
+      *::before,
+      *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important
+      }
+
+      .reveal {
+        opacity: 1;
+        transform: none
+      }
+    }
+  </style>
 </head>
+
 <body>
-<header>
-  <h1>Peramalan Volume Lalu Lintas per Jam - I-94, Minnesota</h1>
-  <p>Model LSTM (TensorFlow/Keras) &middot; Dataset Metro Interstate Traffic Volume</p>
-</header>
-<main>
-  <div class="card">
-    <h2>Kinerja Model pada Data Uji</h2>
-    <p class="muted">Dibandingkan dengan dua baseline sederhana. Semakin kecil RMSE/MAE semakin baik.</p>
-    <div class="metrics" id="metrics">Memuat...</div>
-  </div>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <linearGradient id="gradRing" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#22d3ee" />
+        <stop offset="1" stop-color="#3b82f6" />
+      </linearGradient>
+    </defs>
+  </svg>
 
-  <div class="card">
-    <h2>Data Historis</h2>
-    <p class="muted">Volume kendaraan per jam (data terakhir yang dimiliki model).</p>
-    <div class="controls">
-      <label>Tampilkan:
-        <select id="histHours"><option value="72">3 hari</option><option value="168" selected>7 hari</option><option value="336">14 hari</option><option value="720">30 hari</option></select>
-      </label>
+  <header class="hero">
+    <canvas id="road" aria-hidden="true"></canvas>
+    <div class="hero-inner">
+      <span class="live fade"><i></i>Model LSTM aktif</span>
+      <h1 class="fade" style="animation-delay:.1s">Membaca denyut <span class="grad">lalu lintas I-94</span> jam demi
+        jam</h1>
+      <p class="sub fade" style="animation-delay:.2s">Jaringan LSTM mempelajari 48 jam terakhir dan pola kalender untuk
+        meramalkan volume kendaraan di Interstate 94, Minnesota.</p>
+      <div class="chips" id="chips"></div>
     </div>
-    <div class="chart-box"><canvas id="histChart"></canvas></div>
-  </div>
+    <div class="scroll" aria-hidden="true"></div>
+  </header>
 
-  <div class="card">
-    <h2>Peramalan ke Depan</h2>
-    <p class="muted">Ramalan rekursif: hasil prediksi jam ke-t dipakai sebagai input jam ke-(t+1). Makin jauh horizon, makin besar ketidakpastiannya.</p>
-    <div class="controls">
-      <label>Horizon:
-        <select id="horizon"><option value="12">12 jam</option><option value="24" selected>24 jam</option><option value="48">48 jam</option><option value="72">72 jam</option></select>
-      </label>
-      <button id="btnForecast">Jalankan Peramalan</button>
-    </div>
-    <div class="chart-box"><canvas id="fcChart"></canvas></div>
-    <div id="err"></div>
-  </div>
+  <main>
+    <section class="card reveal" aria-labelledby="t-m">
+      <div class="card-head">
+        <div>
+          <h2 id="t-m"><span class="ico"><svg viewBox="0 0 24 24">
+                <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
+              </svg></span>Kinerja Model pada Data Uji</h2>
+          <p class="muted">LSTM dibandingkan dengan dua baseline sederhana. RMSE dan MAE makin kecil makin baik; R&sup2;
+            makin dekat ke 1 makin baik.</p>
+        </div>
+      </div>
+      <div class="metrics" id="metrics">
+        <div class="skeleton"></div>
+        <div class="skeleton"></div>
+        <div class="skeleton"></div>
+      </div>
+      <div class="insight" id="insight" hidden></div>
+    </section>
 
-  <div class="card">
-    <h2>Aktual vs Prediksi (Data Uji)</h2>
-    <p class="muted">Prediksi satu jam ke depan pada data yang tidak dipakai saat pelatihan.</p>
-    <div class="controls">
-      <label>Tampilkan:
-        <select id="evalHours"><option value="72">3 hari</option><option value="168" selected>7 hari</option><option value="336">14 hari</option></select>
-      </label>
-    </div>
-    <div class="chart-box"><canvas id="evalChart"></canvas></div>
-  </div>
-</main>
+    <section class="card reveal" aria-labelledby="t-h">
+      <div class="card-head">
+        <div>
+          <h2 id="t-h"><span class="ico"><svg viewBox="0 0 24 24">
+                <path d="M3 12h4l3-8 4 16 3-8h4" />
+              </svg></span>Data Historis</h2>
+          <p class="muted">Volume kendaraan per jam pada periode terakhir yang dimiliki model. Arahkan kursor ke grafik
+            untuk melihat nilainya.</p>
+        </div>
+        <div class="seg" id="segHist" role="group" aria-label="Rentang data historis"><span class="pill"></span>
+          <button data-v="72">3 hari</button><button data-v="168" class="active">7 hari</button><button data-v="336">14
+            hari</button><button data-v="720">30 hari</button>
+        </div>
+      </div>
+      <div class="chart-box"><canvas id="histChart"></canvas>
+        <div class="tip" id="tip-hist"></div>
+        <div class="state" id="s-hist">
+          <div class="spinner"></div>Memuat data...
+        </div>
+      </div>
+    </section>
 
-<script>
-const charts = {};
-function draw(id, labels, datasets){
-  if(charts[id]) charts[id].destroy();
-  charts[id] = new Chart(document.getElementById(id), {
-    type:'line', data:{labels, datasets},
-    options:{responsive:true, maintainAspectRatio:false, animation:false, interaction:{mode:'index',intersect:false},
-      elements:{point:{radius:0}},
-      scales:{x:{ticks:{maxTicksLimit:8}}, y:{title:{display:true,text:'Kendaraan / jam'}, beginAtZero:true}}}
-  });
-}
-const ds = (label, data, color, dash) => ({label, data, borderColor:color, backgroundColor:color, borderWidth:2, borderDash:dash||[], tension:.2});
+    <section class="card reveal" aria-labelledby="t-f">
+      <div class="card-head">
+        <div>
+          <h2 id="t-f"><span class="ico"><svg viewBox="0 0 24 24">
+                <path d="M3 17l6-6 4 4 8-8M15 7h6v6" />
+              </svg></span>Peramalan ke Depan</h2>
+          <p class="muted">Ramalan rekursif: prediksi jam ke-t dipakai sebagai input jam ke-(t+1), jadi makin jauh
+            horizon, makin besar ketidakpastiannya.</p>
+        </div>
+        <div class="tools">
+          <div class="seg" id="segFc" role="group" aria-label="Horizon peramalan"><span class="pill"></span>
+            <button data-v="12">12 jam</button><button data-v="24" class="active">24 jam</button><button data-v="48">48
+              jam</button><button data-v="72">72 jam</button>
+          </div>
+          <button class="go" id="btnFc"><svg viewBox="0 0 24 24">
+              <path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5" />
+            </svg><span>Hitung ulang</span></button>
+        </div>
+      </div>
+      <div class="chart-box"><canvas id="fcChart"></canvas>
+        <div class="tip" id="tip-fc"></div>
+        <div class="state" id="s-fc">
+          <div class="spinner"></div>Menghitung ramalan...
+        </div>
+      </div>
+      <div class="legend"><span><i style="background:var(--cyan)"></i>Data historis (48 jam)</span><span><i
+            class="dash"></i>Ramalan LSTM</span></div>
+      <div class="stats" id="fcStats"></div>
+      <div id="heatWrap" hidden>
+        <div class="heat-title"><span>Peta panas per jam</span><span class="heat-legend">Sepi <i></i> Padat</span></div>
+        <div class="heat" id="heat"></div>
+      </div>
+    </section>
 
-async function getJSON(url){ const r = await fetch(url); if(!r.ok) throw new Error('Gagal memuat ' + url); return r.json(); }
+    <section class="card reveal" aria-labelledby="t-e">
+      <div class="card-head">
+        <div>
+          <h2 id="t-e"><span class="ico"><svg viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="9" />
+                <circle cx="12" cy="12" r="4" />
+                <path d="M12 3v3M12 18v3M3 12h3M18 12h3" />
+              </svg></span>Aktual vs Prediksi</h2>
+          <p class="muted">Prediksi satu jam ke depan pada data yang tidak dipakai saat pelatihan. Makin berhimpit kedua
+            garis, makin akurat modelnya.</p>
+        </div>
+        <div class="seg" id="segEv" role="group" aria-label="Rentang data uji"><span class="pill"></span>
+          <button data-v="72">3 hari</button><button data-v="168" class="active">7 hari</button><button data-v="336">14
+            hari</button>
+        </div>
+      </div>
+      <div class="chart-box"><canvas id="evChart"></canvas>
+        <div class="tip" id="tip-ev"></div>
+        <div class="state" id="s-ev">
+          <div class="spinner"></div>Memuat data...
+        </div>
+      </div>
+      <div class="legend"><span><i style="background:var(--cyan)"></i>Aktual</span><span><i
+            style="background:var(--amber)"></i>Prediksi LSTM</span></div>
+      <div class="stats" id="evStats"></div>
+    </section>
+  </main>
+  <footer>Data: Metro Interstate Traffic Volume (UCI/Kaggle) &middot; arah barat I-94, dekat Minneapolis&ndash;St Paul
+  </footer>
 
-async function loadMetrics(){
-  const info = await getJSON('/api/info');
-  const el = document.getElementById('metrics'); el.innerHTML = '';
-  for(const [name, m] of Object.entries(info.metrics)){
-    el.insertAdjacentHTML('beforeend', `<div class="metric"><b>${name}</b>RMSE: ${m.rmse}<br>MAE: ${m.mae}<br>R&sup2;: ${m.r2}</div>`);
-  }
-}
-async function loadHistory(){
-  const h = await getJSON('/api/history?hours=' + document.getElementById('histHours').value);
-  draw('histChart', h.time, [ds('Volume aktual', h.volume, '#2563eb')]);
-}
-async function runForecast(){
-  const err = document.getElementById('err'); err.textContent = '';
-  const btn = document.getElementById('btnForecast'); btn.disabled = true; btn.textContent = 'Menghitung...';
-  try{
-    const hist = await getJSON('/api/history?hours=48');
-    const fc = await getJSON('/api/forecast?horizon=' + document.getElementById('horizon').value);
-    const labels = hist.time.concat(fc.map(x=>x.time));
-    const a = hist.volume.concat(fc.map(()=>null));
-    const f = hist.volume.map((_,i)=> i===hist.volume.length-1 ? hist.volume[i] : null).concat(fc.map(x=>x.volume));
-    draw('fcChart', labels, [ds('Data historis (48 jam)', a, '#2563eb'), ds('Ramalan LSTM', f, '#f97316', [6,4])]);
-  }catch(e){ err.textContent = e.message; }
-  btn.disabled = false; btn.textContent = 'Jalankan Peramalan';
-}
-async function loadEval(){
-  const e = await getJSON('/api/evaluation?hours=' + document.getElementById('evalHours').value);
-  draw('evalChart', e.time, [ds('Aktual', e.actual, '#2563eb'), ds('Prediksi LSTM', e.predicted, '#f97316')]);
-}
-document.getElementById('histHours').onchange = loadHistory;
-document.getElementById('evalHours').onchange = loadEval;
-document.getElementById('btnForecast').onclick = runForecast;
-Promise.all([loadMetrics(), loadHistory(), runForecast(), loadEval()]).catch(e => { document.getElementById('err').textContent = e.message; });
-</script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const nf = (n, d = 0) => Number(n).toLocaleString('id-ID', { minimumFractionDigits: d, maximumFractionDigits: d });
+    const REDUCE = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const CYAN = '#22d3ee', AMBER = '#fbbf24';
+    const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+    const fmtLabel = (s) => s.slice(8, 10) + '/' + s.slice(5, 7) + ' ' + s.slice(11, 16);
+
+    async function getJSON(url) {
+      const r = await fetch(url);
+      if (!r.ok) throw new Error('Server mengembalikan status ' + r.status + ' untuk ' + url);
+      return r.json();
+    }
+
+    /* =================== LATAR JALAN ANIMASI (HERO) =================== */
+    (function road() {
+      const cv = $('road'), ctx = cv.getContext('2d'); let W, H, streaks = [], vis = true, last = 0;
+      function size() {
+        const r = cv.getBoundingClientRect(), d = Math.min(devicePixelRatio || 1, 2);
+        W = r.width; H = r.height; cv.width = W * d; cv.height = H * d; ctx.setTransform(d, 0, 0, d, 0, 0);
+        const lanes = 8, n = Math.round(W / 24); streaks = [];
+        for (let i = 0; i < n; i++) {
+          const lane = i % lanes, dir = lane < 4 ? -1 : 1;
+          streaks.push({
+            lane, dir, x: Math.random() * W, len: 50 + Math.random() * 170, v: 120 + Math.random() * 380, w: 1.6 + Math.random() * 1.8,
+            c: dir < 0 ? (Math.random() < .7 ? '251,113,133' : '251,191,36') : (Math.random() < .7 ? '186,230,253' : '34,211,238')
+          });
+        }
+      }
+      function y(l) { return H * .50 + (l + .5) * (H * .40 / 8) + (l >= 4 ? 14 : 0); }
+      function frame(t) {
+        const dt = Math.min((t - last) / 1000, .05); last = t;
+        ctx.clearRect(0, 0, W, H);
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = 'rgba(148,163,184,.07)'; ctx.lineWidth = 1; ctx.setLineDash([22, 26]);
+        for (let l = 0; l <= 8; l++) { if (l === 4) continue; ctx.beginPath(); ctx.moveTo(0, y(l) - 11); ctx.lineTo(W, y(l) - 11); ctx.stroke(); }
+        ctx.setLineDash([]); ctx.globalCompositeOperation = 'lighter';
+        for (const s of streaks) {
+          s.x += s.dir * s.v * dt;
+          if (s.dir < 0 && s.x + s.len < 0) s.x = W + Math.random() * 200;
+          if (s.dir > 0 && s.x - s.len > W) s.x = -Math.random() * 200;
+          const yy = y(s.lane), x0 = s.x, x1 = s.x - s.dir * s.len;
+          const g = ctx.createLinearGradient(x0, 0, x1, 0);
+          g.addColorStop(0, `rgba(${s.c},.95)`); g.addColorStop(1, `rgba(${s.c},0)`);
+          ctx.strokeStyle = g; ctx.lineWidth = s.w; ctx.lineCap = 'round';
+          ctx.shadowColor = `rgba(${s.c},.9)`; ctx.shadowBlur = 10;
+          ctx.beginPath(); ctx.moveTo(x0, yy); ctx.lineTo(x1, yy); ctx.stroke();
+        }
+        ctx.shadowBlur = 0;
+        if (vis && !REDUCE && !document.hidden) requestAnimationFrame(frame);
+      }
+      size(); addEventListener('resize', () => { size(); if (REDUCE) frame(performance.now()); });
+      new IntersectionObserver(e => { const was = vis; vis = e[0].isIntersecting; if (vis && !was) { last = performance.now(); requestAnimationFrame(frame); } }).observe(cv);
+      document.addEventListener('visibilitychange', () => { if (!document.hidden && vis) { last = performance.now(); requestAnimationFrame(frame); } });
+      last = performance.now(); requestAnimationFrame(frame);
+    })();
+
+    /* =================== GRAFIK GARIS BUATAN SENDIRI =================== */
+    class LineChart {
+      constructor(canvas, tip, opts = {}) {
+        this.c = canvas; this.ctx = canvas.getContext('2d'); this.tip = tip; this.opts = opts;
+        this.data = null; this.p = 1; this.hover = null; this.visible = false; this.pending = false; this.raf = 0; this.pulsing = false;
+        new IntersectionObserver(es => { this.visible = es[0].isIntersecting; if (this.visible && this.pending) this.play(); if (this.visible && opts.pulse) this.loop(); }, { threshold: .3 }).observe(canvas);
+        new ResizeObserver(() => this.resize()).observe(canvas.parentElement);
+        canvas.addEventListener('pointermove', (e) => this.onMove(e));
+        canvas.addEventListener('pointerleave', () => { this.hover = null; this.tip.classList.remove('on'); this.render(); });
+      }
+      resize() {
+        const r = this.c.parentElement.getBoundingClientRect(), d = Math.min(devicePixelRatio || 1, 2);
+        this.w = r.width; this.h = r.height; this.c.width = r.width * d; this.c.height = r.height * d;
+        this.ctx.setTransform(d, 0, 0, d, 0, 0); this.render();
+      }
+      setData(d) {
+        this.data = d; this.hover = null; this.tip.classList.remove('on');
+        let mx = 0; d.series.forEach(s => s.values.forEach(v => { if (v != null && v > mx) mx = v; }));
+        const rough = Math.max(mx, 1) / 4, pw = Math.pow(10, Math.floor(Math.log10(rough)));
+        const step = [1, 2, 2.5, 5, 10].map(k => k * pw).find(v => v >= rough);
+        this.step = step; this.ymax = step * 4; this.pending = true; this.p = 0; this.render();
+        if (this.visible) this.play();
+      }
+      play() {
+        this.pending = false; cancelAnimationFrame(this.raf);
+        if (REDUCE) { this.p = 1; this.render(); return; }
+        const t0 = performance.now(), dur = this.opts.dur || 1200;
+        const step = (t) => { const x = Math.min(1, (t - t0) / dur); this.p = 1 - Math.pow(1 - x, 3); this.render(); if (x < 1) this.raf = requestAnimationFrame(step); };
+        this.raf = requestAnimationFrame(step);
+      }
+      loop() {
+        if (this.pulsing) return; this.pulsing = true;
+        const f = () => { if (!this.visible) { this.pulsing = false; return; } if (this.p >= 1) this.render(); requestAnimationFrame(f); };
+        requestAnimationFrame(f);
+      }
+      geom() {
+        const L = 60, R = 18, T = 16, B = 32, pw = this.w - L - R, ph = this.h - T - B, n = this.data.labels.length;
+        return { L, R, T, B, pw, ph, n, x: (i) => L + (n <= 1 ? 0 : i / (n - 1)) * pw, y: (v) => T + ph * (1 - v / this.ymax) };
+      }
+      trace(ctx, pts, smooth) {
+        ctx.moveTo(pts[0][0], pts[0][1]);
+        if (!smooth || pts.length < 3) { for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); return; }
+        for (let i = 1; i < pts.length - 1; i++) { const xc = (pts[i][0] + pts[i + 1][0]) / 2, yc = (pts[i][1] + pts[i + 1][1]) / 2; ctx.quadraticCurveTo(pts[i][0], pts[i][1], xc, yc); }
+        const l = pts[pts.length - 1]; ctx.lineTo(l[0], l[1]);
+      }
+      render() {
+        const ctx = this.ctx; if (!this.w) return;
+        ctx.clearRect(0, 0, this.w, this.h); ctx.shadowBlur = 0;
+        if (!this.data) return;
+        const g = this.geom(), d = this.data, p = this.p;
+        ctx.font = '500 11px Inter, system-ui, sans-serif'; ctx.textBaseline = 'middle';
+        for (let k = 0; k <= 4; k++) {
+          const v = this.step * k, yy = g.y(v);
+          ctx.strokeStyle = 'rgba(148,163,184,.12)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(g.L, yy); ctx.lineTo(g.L + g.pw, yy); ctx.stroke();
+          ctx.fillStyle = '#7d8eab'; ctx.textAlign = 'right'; ctx.fillText(nf(v), g.L - 10, yy);
+        }
+        ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillStyle = '#7d8eab';
+        const ticks = Math.max(3, Math.min(8, Math.floor(g.pw / 105)));
+        for (let k = 0; k < ticks; k++) { const i = Math.round(k * (g.n - 1) / (ticks - 1)); ctx.fillText(fmtLabel(d.labels[i]), Math.min(Math.max(g.x(i), g.L + 28), g.L + g.pw - 28), g.T + g.ph + 10); }
+
+        if (d.divider != null) {
+          const dx = g.x(d.divider);
+          ctx.fillStyle = 'rgba(251,191,36,.05)'; ctx.fillRect(dx, g.T, g.L + g.pw - dx, g.ph);
+          ctx.strokeStyle = 'rgba(251,191,36,.55)'; ctx.setLineDash([4, 5]); ctx.beginPath(); ctx.moveTo(dx, g.T); ctx.lineTo(dx, g.T + g.ph); ctx.stroke(); ctx.setLineDash([]);
+          ctx.fillStyle = AMBER; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText('SEKARANG', dx + 7, g.T + 5);
+        }
+
+        ctx.save(); ctx.beginPath(); ctx.rect(0, 0, g.L + g.pw * p + 1, this.h); ctx.clip();
+        const smooth = g.n < 200;
+        d.series.forEach(s => {
+          let run = [];
+          const flush = () => {
+            if (run.length < 2) { run = []; return; }
+            if (s.fill) {
+              const gr = ctx.createLinearGradient(0, g.T, 0, g.T + g.ph); gr.addColorStop(0, rgba(s.color, .30)); gr.addColorStop(1, rgba(s.color, 0));
+              ctx.beginPath(); this.trace(ctx, run, smooth); ctx.lineTo(run[run.length - 1][0], g.T + g.ph); ctx.lineTo(run[0][0], g.T + g.ph); ctx.closePath(); ctx.fillStyle = gr; ctx.fill();
+            }
+            ctx.beginPath(); this.trace(ctx, run, smooth);
+            ctx.setLineDash(s.dash || []); ctx.lineWidth = s.width || 2.2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+            ctx.strokeStyle = s.color; ctx.shadowColor = rgba(s.color, .75); ctx.shadowBlur = 12; ctx.stroke();
+            ctx.shadowBlur = 0; ctx.setLineDash([]); run = [];
+          };
+          s.values.forEach((v, i) => { if (v == null) flush(); else run.push([g.x(i), g.y(v)]); }); flush();
+        });
+        ctx.restore();
+
+        if (this.opts.pulse && d.divider != null && p >= 1) {
+          const s0 = d.series[0], v = s0.values[d.divider];
+          if (v != null) {
+            const t = (performance.now() % 1800) / 1800, px = g.x(d.divider), py = g.y(v);
+            ctx.beginPath(); ctx.arc(px, py, 5 + t * 14, 0, 7); ctx.strokeStyle = `rgba(251,191,36,${.7 * (1 - t)})`; ctx.lineWidth = 2; ctx.stroke();
+            ctx.beginPath(); ctx.arc(px, py, 5, 0, 7); ctx.fillStyle = AMBER; ctx.shadowColor = AMBER; ctx.shadowBlur = 14; ctx.fill(); ctx.shadowBlur = 0;
+          }
+        }
+        if (this.hover != null && p >= 1) {
+          const i = this.hover, hx = g.x(i);
+          ctx.strokeStyle = 'rgba(255,255,255,.28)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(hx, g.T); ctx.lineTo(hx, g.T + g.ph); ctx.stroke();
+          d.series.forEach(s => {
+            const v = s.values[i]; if (v == null) return;
+            ctx.beginPath(); ctx.arc(hx, g.y(v), 5, 0, 7); ctx.fillStyle = s.color; ctx.shadowColor = s.color; ctx.shadowBlur = 12; ctx.fill(); ctx.shadowBlur = 0;
+            ctx.lineWidth = 2; ctx.strokeStyle = '#050a16'; ctx.stroke();
+          });
+        }
+      }
+      onMove(e) {
+        if (!this.data || this.p < 1) return;
+        const g = this.geom(), r = this.c.getBoundingClientRect(), x = e.clientX - r.left;
+        const i = Math.max(0, Math.min(g.n - 1, Math.round((x - g.L) / g.pw * (g.n - 1))));
+        this.hover = i; this.render();
+        const rows = this.data.series.filter(s => s.values[i] != null)
+          .map(s => `<div class="tr"><i style="background:${s.color}"></i>${s.name}<b>${nf(s.values[i])}</b></div>`).join('');
+        this.tip.innerHTML = `<div class="tt">${fmtLabel(this.data.labels[i])}</div>${rows}`;
+        const tw = this.tip.offsetWidth, hx = g.x(i);
+        this.tip.style.left = Math.max(4, Math.min(this.w - tw - 4, hx + 16 + tw > this.w ? hx - tw - 16 : hx + 16)) + 'px';
+        this.tip.classList.add('on');
+      }
+    }
+    const chHist = new LineChart($('histChart'), $('tip-hist'));
+    const chFc = new LineChart($('fcChart'), $('tip-fc'), { pulse: true, dur: 1500 });
+    const chEv = new LineChart($('evChart'), $('tip-ev'));
+
+    /* =================== UTILITAS UI =================== */
+    function countUp(el) {
+      const to = parseFloat(el.dataset.count), dec = +el.dataset.dec || 0;
+      if (REDUCE) { el.textContent = nf(to, dec); return; }
+      const t0 = performance.now(), dur = 1300;
+      const f = (t) => { const x = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - x, 3); el.textContent = nf(to * e, dec); if (x < 1) requestAnimationFrame(f); };
+      requestAnimationFrame(f);
+    }
+    function placePill(seg) {
+      const a = seg.querySelector('.active'), pill = seg.querySelector('.pill'); if (!a) return;
+      pill.style.left = a.offsetLeft + 'px'; pill.style.width = a.offsetWidth + 'px';
+    }
+    function bindSeg(id, handler) {
+      const seg = $(id);
+      seg.addEventListener('click', (e) => {
+        const b = e.target.closest('button'); if (!b || b.classList.contains('active')) return;
+        seg.querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b)); placePill(seg); handler();
+      });
+    }
+    const segVal = (id) => $(id).querySelector('.active').dataset.v;
+    function setState(key, mode, msg, retry) {
+      const el = $('s-' + key);
+      if (mode === 'hide') { el.className = 'state hidden'; return; }
+      if (mode === 'loading') { el.className = 'state'; el.innerHTML = '<div class="spinner"></div>' + msg; return; }
+      el.className = 'state error'; el.innerHTML = '<div>' + msg + '</div>';
+      if (retry) { const b = document.createElement('button'); b.className = 'retry'; b.textContent = 'Coba lagi'; b.onclick = retry; el.appendChild(b); }
+    }
+    const statHTML = (items) => items.map((s, i) => `<div class="stat" style="--i:${i}"><span>${s[0]}</span><b>${s[1]}</b><small>${s[2]}</small></div>`).join('');
+
+    /* =================== DATA =================== */
+    async function loadInfo() {
+      const info = await getJSON('/api/info');
+      const day = (s) => String(s).slice(0, 10), feats = info.features ? info.features.length : 5;
+      $('chips').innerHTML = ['Input ' + info.timesteps + ' jam terakhir', feats + ' fitur (volume + kalender)', day(info.data_start) + ' s/d ' + day(info.data_end)]
+        .map((t, i) => `<span class="chip" style="animation-delay:${.35 + i * .12}s">${t}</span>`).join('');
+
+      const entries = Object.entries(info.metrics);
+      const best = entries.reduce((a, b) => b[1].rmse < a[1].rmse ? b : a)[0];
+      const maxR = Math.max(...entries.map(([, m]) => m.rmse)), C = 2 * Math.PI * 34;
+      $('metrics').innerHTML = entries.map(([name, m], i) => {
+        const r2 = Math.max(0, Math.min(1, m.r2));
+        return `<div class="metric${name === best ? ' best' : ''}" style="--i:${i}">
+      <div class="m-top"><span class="name">${name}</span>${name === best ? '<span class="badge">Terbaik</span>' : ''}</div>
+      <div class="m-body">
+        <div class="ring"><svg viewBox="0 0 80 80"><circle class="trk" cx="40" cy="40" r="34"/><circle class="val" cx="40" cy="40" r="34" stroke-dasharray="${C}" stroke-dashoffset="${C}" data-off="${C * (1 - r2)}"/></svg>
+          <div class="ring-txt"><b data-count="${m.r2}" data-dec="3">0</b><small>R&sup2;</small></div></div>
+        <div class="m-nums"><div><span>RMSE</span><b data-count="${m.rmse}" data-dec="1">0</b></div><div class="sm"><span>MAE</span><b data-count="${m.mae}" data-dec="1">0</b></div></div>
+      </div>
+      <div class="bar"><i data-w="${Math.round(m.rmse / maxR * 100)}"></i></div><div class="bar-cap">Galat relatif terhadap model terburuk (RMSE)</div></div>`;
+      }).join('');
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        document.querySelectorAll('.ring .val').forEach(c => c.style.strokeDashoffset = c.dataset.off);
+        document.querySelectorAll('.bar i').forEach(b => b.style.width = b.dataset.w + '%');
+        document.querySelectorAll('[data-count]').forEach(countUp);
+      }));
+
+      const L = info.metrics['LSTM'], P = info.metrics['Persistence'], S = info.metrics['Seasonal naive'], box = $('insight');
+      if (L && P && S) {
+        const pct = (a, b) => Math.round((1 - a / b) * 100);
+        const f = (v, n) => v >= 0 ? `<b>${v}% lebih rendah</b> dari ${n}` : `${Math.abs(v)}% lebih tinggi dari ${n}`;
+        box.hidden = false;
+        box.innerHTML = `<svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg><div>RMSE LSTM ${f(pct(L.rmse, P.rmse), 'Persistence')} dan ${f(pct(L.rmse, S.rmse), 'Seasonal naive')}.</div>`;
+      }
+    }
+
+    async function loadHistory() {
+      setState('hist', 'loading', 'Memuat data...');
+      try {
+        const h = await getJSON('/api/history?hours=' + segVal('segHist'));
+        chHist.setData({ labels: h.time, divider: null, series: [{ name: 'Volume aktual', color: CYAN, values: h.volume, fill: true }] });
+        setState('hist', 'hide');
+      } catch (e) { setState('hist', 'error', e.message, loadHistory); }
+    }
+
+    function heatColor(t) {
+      const A = [34, 211, 238], B = [251, 191, 36], C = [239, 68, 68];
+      const [u, v, k] = t < .5 ? [A, B, t * 2] : [B, C, (t - .5) * 2];
+      return `rgb(${u.map((x, i) => Math.round(x + (v[i] - x) * k)).join(',')})`;
+    }
+    async function runForecast() {
+      const btn = $('btnFc'); btn.disabled = true; btn.classList.add('busy'); btn.querySelector('span').textContent = 'Menghitung...';
+      setState('fc', 'loading', 'Menghitung ramalan...'); $('fcStats').innerHTML = ''; $('heatWrap').hidden = true;
+      try {
+        const [hist, fc] = await Promise.all([getJSON('/api/history?hours=48'), getJSON('/api/forecast?horizon=' + segVal('segFc'))]);
+        const n = hist.volume.length, labels = hist.time.concat(fc.map(x => x.time));
+        const a = hist.volume.concat(fc.map(() => null));
+        const f = hist.volume.map((v, i) => i === n - 1 ? v : null).concat(fc.map(x => x.volume));
+        chFc.setData({
+          labels, divider: n - 1, series: [
+            { name: 'Data historis', color: CYAN, values: a, fill: true },
+            { name: 'Ramalan LSTM', color: AMBER, values: f, dash: [7, 5], fill: true }]
+        });
+        const v = fc.map(x => x.volume), mx = Math.max(...v), mn = Math.min(...v), hi = fc[v.indexOf(mx)], lo = fc[v.indexOf(mn)];
+        const avg = Math.round(v.reduce((s, x) => s + x, 0) / v.length), hm = (t) => fmtLabel(t);
+        $('fcStats').innerHTML = statHTML([['Puncak ramalan', nf(mx), hm(hi.time)], ['Terendah', nf(mn), hm(lo.time)], ['Rata-rata', nf(avg), 'kendaraan / jam'], ['Horizon', fc.length + ' jam', 'mulai ' + hm(fc[0].time)]]);
+        $('heat').innerHTML = fc.map((x, i) => `<div class="cell" style="--i:${i};background:${heatColor((x.volume - mn) / Math.max(1, mx - mn))}" title="${hm(x.time)}: ${nf(x.volume)} kendaraan">${x.time.slice(11, 13)}</div>`).join('');
+        $('heatWrap').hidden = false; setState('fc', 'hide');
+      } catch (e) { setState('fc', 'error', e.message, runForecast); }
+      btn.disabled = false; btn.classList.remove('busy'); btn.querySelector('span').textContent = 'Hitung ulang';
+    }
+
+    async function loadEval() {
+      setState('ev', 'loading', 'Memuat data...');
+      try {
+        const e = await getJSON('/api/evaluation?hours=' + segVal('segEv'));
+        chEv.setData({
+          labels: e.time, divider: null, series: [
+            { name: 'Aktual', color: CYAN, values: e.actual }, { name: 'Prediksi LSTM', color: AMBER, values: e.predicted }]
+        });
+        const err = e.actual.map((x, i) => Math.abs(x - e.predicted[i])), mae = err.reduce((s, x) => s + x, 0) / err.length;
+        const mi = err.indexOf(Math.max(...err));
+        $('evStats').innerHTML = statHTML([['MAE rentang ini', nf(mae, 1), 'kendaraan / jam'], ['Galat terbesar', nf(err[mi]), fmtLabel(e.time[mi])], ['Jumlah titik', nf(err.length), 'jam diuji']]);
+        setState('ev', 'hide');
+      } catch (er) { setState('ev', 'error', er.message, loadEval); }
+    }
+
+    /* =================== INTERAKSI =================== */
+    bindSeg('segHist', loadHistory); bindSeg('segFc', runForecast); bindSeg('segEv', loadEval);
+    $('btnFc').onclick = runForecast;
+    document.querySelectorAll('.seg').forEach(placePill);
+    addEventListener('resize', () => document.querySelectorAll('.seg').forEach(placePill));
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => document.querySelectorAll('.seg').forEach(placePill));
+
+    document.querySelectorAll('.card').forEach(c => c.addEventListener('pointermove', (e) => {
+      const r = c.getBoundingClientRect(); c.style.setProperty('--mx', (e.clientX - r.left) + 'px'); c.style.setProperty('--my', (e.clientY - r.top) + 'px');
+    }));
+    const io = new IntersectionObserver((es) => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { threshold: .08 });
+    document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+    setTimeout(() => document.querySelectorAll('.reveal').forEach(el => el.classList.add('in')), 3500);
+
+    /* /api/info dimuat lebih dulu agar model TensorFlow hanya dimuat sekali. */
+    (async function init() {
+      try { await loadInfo(); }
+      catch (e) { $('metrics').innerHTML = '<div style="color:var(--bad)">Gagal memuat metrik: ' + e.message + '</div>'; }
+      loadHistory(); runForecast(); loadEval();
+    })();
+  </script>
 </body>
+
 </html>
