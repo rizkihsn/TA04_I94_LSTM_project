@@ -9,17 +9,10 @@ from fastapi import FastAPI
 from a2wsgi import WSGIMiddleware
 from app import app as flask_app, recursive_forecast, load_artifacts
 
-# Import spaces untuk ZeroGPU (GPU Zero hardware HF Spaces)
-try:
-    import spaces
-    HAS_SPACES = True
-except ImportError:
-    HAS_SPACES = False
-
 # Muat model dan metadata
 state = load_artifacts()
 
-def _do_predict(horizon_hours):
+def gradio_predict(horizon_hours):
     results = recursive_forecast(int(horizon_hours))
     df = pd.DataFrame(results)
     df.columns = ["Waktu", "Prediksi Volume (Kendaraan/Jam)"]
@@ -31,15 +24,6 @@ def _do_predict(horizon_hours):
         f"- **Rata-rata:** {int(v.mean()):,} kendaraan/jam"
     )
     return df, summary
-
-# Bungkus dengan @spaces.GPU jika tersedia (diperlukan oleh ZeroGPU hardware HF Spaces)
-if HAS_SPACES:
-    @spaces.GPU
-    def gradio_predict(horizon_hours):
-        return _do_predict(horizon_hours)
-else:
-    def gradio_predict(horizon_hours):
-        return _do_predict(horizon_hours)
 
 # Buat UI Gradio Blocks
 with gr.Blocks(title="Peramalan Volume Lalu Lintas I-94 (LSTM)", theme=gr.themes.Soft()) as demo:
