@@ -1,17 +1,18 @@
 """
-Launcher untuk Hugging Face Spaces (Gradio SDK + Flask).
-Menjalankan dashboard Flask dan antarmuka Gradio di port 7860 tanpa memerlukan kartu kredit.
+Launcher untuk Hugging Face Spaces (Gradio SDK + Flask, ZeroGPU hardware).
 """
 import os
+import spaces
 import pandas as pd
 import gradio as gr
 from fastapi import FastAPI
 from a2wsgi import WSGIMiddleware
 from app import app as flask_app, recursive_forecast, load_artifacts
 
-# Muat model dan metadata
+# Muat model dan metadata saat startup
 state = load_artifacts()
 
+@spaces.GPU
 def gradio_predict(horizon_hours):
     results = recursive_forecast(int(horizon_hours))
     df = pd.DataFrame(results)

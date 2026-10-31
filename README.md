@@ -7,7 +7,6 @@ sdk: gradio
 sdk_version: 4.44.1
 app_file: run.py
 pinned: false
-hardware: cpu-basic
 ---
 
 # TA-04: Peramalan Volume Lalu Lintas per Jam I-94 dengan LSTM
