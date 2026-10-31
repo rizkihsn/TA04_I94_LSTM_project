@@ -20,12 +20,49 @@ def load_artifacts():
     """Muat model & data sekali saja (lazy) agar start-up cepat."""
     if _state:
         return _state
-    from tensorflow.keras.models import load_model  # import di sini supaya mudah di-test
+    import inspect
+    from tensorflow.keras.models import load_model
+    import tensorflow.keras.initializers as init_module
+
+    # Patch Initializer agar kompatibel antara Keras 2 dan Keras 3 (atasi unexpected argument 'input_axes')
+    try:
+        @classmethod
+        def safe_from_config(cls, config):
+            cfg = dict(config)
+            cfg.pop("input_axes", None)
+            cfg.pop("output_axes", None)
+            try:
+                sig = inspect.signature(cls.__init__)
+                valid_kwargs = {k: v for k, v in cfg.items() if k in sig.parameters}
+                return cls(**valid_kwargs)
+            except Exception:
+                return cls(**cfg)
+        init_module.Initializer.from_config = safe_from_config
+    except Exception:
+        pass
+
+    for name in ["GlorotUniform", "Orthogonal"]:
+        init_cls = getattr(init_module, name, None)
+        if init_cls:
+            orig_init = init_cls.__init__
+            def _make_safe(fn):
+                def _safe_init(self, *args, **kwargs):
+                    kwargs.pop("input_axes", None)
+                    kwargs.pop("output_axes", None)
+                    fn(self, *args, **kwargs)
+                return _safe_init
+            init_cls.__init__ = _make_safe(orig_init)
+
+    custom_objects = {
+        "GlorotUniform": getattr(init_module, "GlorotUniform", None),
+        "Orthogonal": getattr(init_module, "Orthogonal", None),
+    }
+    custom_objects = {k: v for k, v in custom_objects.items() if v is not None}
 
     with open(os.path.join(MODEL_DIR, "metrics.json")) as f:
         meta = json.load(f)
     _state.update(
-        model=load_model(os.path.join(MODEL_DIR, "lstm_traffic.h5"), compile=False),
+        model=load_model(os.path.join(MODEL_DIR, "lstm_traffic.h5"), compile=False, custom_objects=custom_objects),
         scaler=joblib.load(os.path.join(MODEL_DIR, "scaler.joblib")),
         recent=pd.read_csv(os.path.join(MODEL_DIR, "recent.csv"), index_col=0, parse_dates=True),
         test=pd.read_csv(os.path.join(MODEL_DIR, "test_results.csv"), parse_dates=["date_time"]),

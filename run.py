@@ -6,7 +6,7 @@ import os
 import pandas as pd
 import gradio as gr
 from fastapi import FastAPI
-from starlette.middleware.wsgi import WSGIMiddleware
+from a2wsgi import WSGIMiddleware
 from app import app as flask_app, recursive_forecast, load_artifacts
 
 # Muat model dan metadata
