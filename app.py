@@ -68,17 +68,20 @@ def _fmt(ts):
 
 
 @app.route("/")
+@app.route("/dashboard")
 def index():
     return render_template("index.html")
 
 
 @app.route("/api/info")
+@app.route("/info")
 def api_info():
     s = load_artifacts()
     return jsonify(s["meta"])
 
 
 @app.route("/api/history")
+@app.route("/history")
 def api_history():
     s = load_artifacts()
     hours = min(max(request.args.get("hours", 168, type=int), 24), len(s["recent"]))
@@ -87,12 +90,14 @@ def api_history():
 
 
 @app.route("/api/forecast")
+@app.route("/forecast")
 def api_forecast():
     horizon = min(max(request.args.get("horizon", 24, type=int), 1), MAX_HORIZON)
     return jsonify(recursive_forecast(horizon))
 
 
 @app.route("/api/evaluation")
+@app.route("/evaluation")
 def api_evaluation():
     s = load_artifacts()
     hours = min(max(request.args.get("hours", 168, type=int), 24), len(s["test"]))

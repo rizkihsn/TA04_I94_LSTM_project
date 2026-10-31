@@ -3,8 +3,9 @@ title: TA04 LSTM Traffic Forecasting I-94
 emoji: 🚗
 colorFrom: blue
 colorTo: indigo
-sdk: docker
-app_port: 7860
+sdk: gradio
+sdk_version: 4.44.1
+app_file: run.py
 pinned: false
 ---
 
