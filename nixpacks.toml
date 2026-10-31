@@ -1,0 +1,9 @@
+[phases.setup]
+nixPkgs = ["git-lfs"]
+cmds = ["git lfs install", "git lfs pull"]
+
+[phases.build]
+cmds = ["pip install --no-cache-dir -r requirements.txt"]
+
+[start]
+cmd = "gunicorn app:app --workers 1 --threads 2 --timeout 180 --bind 0.0.0.0:$PORT"
